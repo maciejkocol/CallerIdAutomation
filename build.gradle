@@ -1,0 +1,90 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'org.springframework.boot' version '2.0.2.RELEASE'
+    id 'scala'
+}
+
+apply plugin: 'io.spring.dependency-management'
+
+bootJar {
+    baseName = 'callerid-api'
+    version =  '0.1.0'
+}
+
+configurations.all {
+    resolutionStrategy {
+        eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'io.netty') {
+                details.useVersion "4.0.51.Final"
+            }
+        }
+    }
+}
+
+dependencies {
+
+    //Framework
+    compile 'org.springframework.boot:spring-boot-starter-web'
+
+    //Utils
+    compile 'com.googlecode.libphonenumber:libphonenumber:4.3'
+    compile 'org.apache.commons:commons-csv:1.5'
+
+    //Test
+    testCompile 'org.springframework.boot:spring-boot-starter-test'
+    testCompile 'io.gatling.highcharts:gatling-charts-highcharts:2.3.1'
+    testCompile gradleTestKit()
+
+}
+
+repositories {
+    mavenCentral()
+}
+
+targetCompatibility = 1.8
+sourceCompatibility = 1.8
+
+tasks.withType(Test) {
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+}
+
+task unitTest(type: Test) {
+        useJUnit {
+            systemProperty "testprofile", "unittest"
+        }
+}
+
+task integrationTest(type: Test) {
+    useJUnit {
+        systemProperty "testprofile", "integrationtest"
+    }
+}
+
+/**
+ * Gatling performance tests
+ */
+task loadTest(type: JavaExec) {
+        description = 'Test load the CallerId web service with Gatling'
+        group = 'Load Test'
+        classpath = sourceSets.test.runtimeClasspath
+        jvmArgs = [
+                "-Dgatling.core.directory.binaries=${sourceSets.test.output.classesDir.toString()}",
+                "-Dlogback.configurationFile=${logbackGatlingConfig()}",
+                "-DserverPort=" + "${project.hasProperty('serverPort') ? project.property('serverPort') : '9090'}"
+        ]
+        main = 'io.gatling.app.Gatling'
+        args = [
+                '--simulation', 'webservice.gatling.simulation.WebServiceCallSimulation',
+                '--results-folder', "${buildDir}/gatling-results",
+                '--binaries-folder', sourceSets.test.output.classesDir.toString()
+        ]
+}
+
+def logbackGatlingConfig() {
+    return sourceSets.test.resources.find { it.name == 'logback-gatling.xml'};
+}
